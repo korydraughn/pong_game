@@ -44,41 +44,47 @@ bool HelloWorld::init()
 {
     //////////////////////////////
     // 1. super init first
-    if ( !Scene::init() )
-    {
+    if (!Scene::init())
         return false;
-    }
 
-    auto visibleSize = Director::getInstance()->getVisibleSize();
-    Vec2 origin = Director::getInstance()->getVisibleOrigin();
+    //auto visibleSize = Director::getInstance()->getVisibleSize();
+    //Vec2 origin = Director::getInstance()->getVisibleOrigin();
 
-    /////////////////////////////
-    // 3. add your codes below...
-
-    // add a label shows "Hello World"
-    // create and initialize a label
-
-    auto label = Label::createWithTTF("Hello World", "fonts/Marker Felt.ttf", 24);
-    if (label == nullptr)
+    // Draw paddles.
+    auto* left_paddle = DrawNode::create();
+    if (left_paddle)
     {
-        problemLoading("'fonts/Marker Felt.ttf'");
-    }
-    else
-    {
-        // position the label on the center of the screen
-        label->setPosition(Vec2(origin.x + visibleSize.width/2,
-                                origin.y + visibleSize.height - label->getContentSize().height));
-
-        // add the label as a child to this layer
-        this->addChild(label, 1);
+        Vec2 r_origin{};
+        Vec2 r_dst{100, 100};
+        Color4F r_color{1, 1, 1, 1};
+        left_paddle->drawSolidRect(r_origin, r_dst, r_color);
+        addChild(left_paddle, 0);
     }
 
     // Add keyboard support.
     auto* listener = EventListenerKeyboard::create();
 
-    listener->onKeyPressed = [](auto _key_code, auto* _event)
+    listener->onKeyPressed = [](EventKeyboard::KeyCode _key_code, Event* _event)
     {
         log("Key with keycode %d pressed", _key_code);
+
+        auto* target = _event->getCurrentTarget();
+
+        switch (_key_code)
+        {
+            case EventKeyboard::KeyCode::KEY_UP_ARROW:
+                target->setPositionY(target->getPositionY() + 1);
+                //target->runAction(MoveBy::create(1, {0.f, 4.f}));
+                break;
+
+            case EventKeyboard::KeyCode::KEY_DOWN_ARROW:
+                target->setPositionY(target->getPositionY() - 1);
+                //target->runAction(MoveBy::create(1, {0.f, -4.f}));
+                break;
+
+            default:
+                break;
+        }
     };
 
     listener->onKeyReleased = [](auto _key_code, auto* _event)
@@ -86,7 +92,7 @@ bool HelloWorld::init()
         log("Key with keycode %d released", _key_code);
     };
 
-    Director::getInstance()->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, this);
+    Director::getInstance()->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, left_paddle);
 
     return true;
 }
