@@ -1,0 +1,6 @@
+/*
+*.swp
+!/Classes
+!CMakeLists.txt
+!.gitignore
+!.ycm_extra_conf.py
