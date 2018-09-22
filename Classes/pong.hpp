@@ -37,10 +37,7 @@ public:
     CREATE_FUNC(pong);
 
     bool init() override;
-
     void update(float _delta_time) override;
-
-    void menuCloseCallback(cocos2d::Ref* pSender);
 
 private:
     static auto is_key_pressed(cocos2d::EventKeyboard::KeyCode _key_code) -> bool;

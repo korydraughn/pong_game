@@ -27,6 +27,59 @@
 
 USING_NS_CC;
 
+namespace
+{
+    constexpr int paddle_w = 10;
+    constexpr int paddle_h = 50;
+    constexpr float paddle_speed = 150;
+
+    // Creates a game paddle sprite.
+    DrawNode* create_paddle(Color4F _color)
+    {
+        Vec2 origin{0, 0};
+        Vec2 dst{paddle_w, paddle_h};
+
+        auto* paddle = DrawNode::create();
+        paddle->drawSolidRect(origin, dst, _color);
+        paddle->setAnchorPoint({});
+
+        const auto vsize_half = Director::getInstance()->getVisibleSize().height / 2;
+        paddle->setPositionY(vsize_half - (paddle_h / 2));
+
+        return paddle;
+    }
+
+    // Updates the position of a paddle based on the keys pressed.
+    void move_paddle(DrawNode* _paddle,
+                     bool _key_left,
+                     bool _key_right,
+                     bool _key_up,
+                     bool _key_down,
+                     float _delta_time)
+    {
+        const auto speed = paddle_speed * _delta_time;
+        const auto pos = _paddle->getPosition();
+
+        if (_key_left)
+        {
+            _paddle->setPositionX(pos.x - speed);
+        }
+        else if (_key_right)
+        {
+            _paddle->setPositionX(pos.x + speed);
+        }
+
+        if (_key_up)
+        {
+            _paddle->setPositionY(pos.y + speed);
+        }
+        else if (_key_down)
+        {
+            _paddle->setPositionY(pos.y - speed);
+        }
+    }
+} // anonymous namespace
+
 Scene* pong::createScene()
 {
     return pong::create();
@@ -35,37 +88,36 @@ Scene* pong::createScene()
 // on "init" you need to initialize your instance
 auto pong::init() -> bool
 {
-    //////////////////////////////
-    // 1. super init first
     if (!Scene::init())
         return false;
 
-    // auto visibleSize = Director::getInstance()->getVisibleSize();
-    // Vec2 origin = Director::getInstance()->getVisibleOrigin();
+    // Left paddle.
+    l_paddle_ = create_paddle(Color4F::RED);
+    l_paddle_->setPositionX(10);
+    addChild(l_paddle_);
 
-    // Draw paddles.
-    l_paddle_ = DrawNode::create();
-    if (l_paddle_)
-    {
-        Vec2 r_origin{};
-        Vec2 r_dst{100, 100};
-        Color4F r_color{1, 1, 1, 1};
-        l_paddle_->drawSolidRect(r_origin, r_dst, r_color);
-        addChild(l_paddle_, 0);
-    }
+    // Right paddle.
+    const auto visible_size = Director::getInstance()->getVisibleSize();
+    r_paddle_ = create_paddle(Color4F::GREEN);
+    r_paddle_->setPositionX(visible_size.width - paddle_w - 10);
+    addChild(r_paddle_);
 
     // Add keyboard support.
     auto* listener = EventListenerKeyboard::create();
 
-    listener->onKeyPressed = [](EventKeyboard::KeyCode _key_code, Event* _event) {
+    // clang-format off
+    listener->onKeyPressed = [](auto _key_code, auto* _event)
+    {
         log("Key with keycode %d pressed", _key_code);
         key_state_[static_cast<int>(_key_code)] = true;
     };
 
-    listener->onKeyReleased = [](auto _key_code, auto* _event) {
+    listener->onKeyReleased = [](auto _key_code, auto* _event)
+    {
         log("Key with keycode %d released", _key_code);
         key_state_[static_cast<int>(_key_code)] = false;
     };
+    // clang-format on
 
     Director::getInstance()->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, this);
 
@@ -74,50 +126,25 @@ auto pong::init() -> bool
     return true;
 }
 
-auto pong::menuCloseCallback(Ref* pSender) -> void
-{
-    // Close the cocos2d-x game scene and quit the application
-    Director::getInstance()->end();
-
-#if (CC_TARGET_PLATFORM == CC_PLATFORM_IOS)
-    exit(0);
-#endif
-
-    /*To navigate back to native iOS screen(if present) without quitting the application,
-     * do not use Director::getInstance()->end() and exit(0) as given above,instead trigger
-     * a custom event created in RootViewController.mm as below*/
-
-    // EventCustom customEndEvent("game_scene_close_event");
-    //_eventDispatcher->dispatchEvent(&customEndEvent);
-}
-
 auto pong::update(float _delta_time) -> void
 {
     Node::update(_delta_time);
 
-    if (!l_paddle_)
-        return;
+    // Controls for left paddle.
+    move_paddle(l_paddle_,
+                is_key_pressed(EventKeyboard::KeyCode::KEY_A),
+                is_key_pressed(EventKeyboard::KeyCode::KEY_D),
+                is_key_pressed(EventKeyboard::KeyCode::KEY_W),
+                is_key_pressed(EventKeyboard::KeyCode::KEY_S),
+                _delta_time);
 
-    auto speed = 50.f * _delta_time;
-    auto pos = l_paddle_->getPosition();
-
-    if (is_key_pressed(EventKeyboard::KeyCode::KEY_LEFT_ARROW))
-    {
-        l_paddle_->setPositionX(pos.x - speed);
-    }
-    else if (is_key_pressed(EventKeyboard::KeyCode::KEY_RIGHT_ARROW))
-    {
-        l_paddle_->setPositionX(pos.x + speed);
-    }
-
-    if (is_key_pressed(EventKeyboard::KeyCode::KEY_UP_ARROW))
-    {
-        l_paddle_->setPositionY(pos.y + speed);
-    }
-    else if (is_key_pressed(EventKeyboard::KeyCode::KEY_DOWN_ARROW))
-    {
-        l_paddle_->setPositionY(pos.y - speed);
-    }
+    // Controls for right paddle.
+    move_paddle(r_paddle_,
+                is_key_pressed(EventKeyboard::KeyCode::KEY_LEFT_ARROW),
+                is_key_pressed(EventKeyboard::KeyCode::KEY_RIGHT_ARROW),
+                is_key_pressed(EventKeyboard::KeyCode::KEY_UP_ARROW),
+                is_key_pressed(EventKeyboard::KeyCode::KEY_DOWN_ARROW),
+                _delta_time);
 }
 
 auto pong::is_key_pressed(EventKeyboard::KeyCode _key_code) -> bool
