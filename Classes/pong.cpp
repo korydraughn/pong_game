@@ -52,8 +52,6 @@ namespace
     // Updates the position of a paddle based on the keys pressed.
     void move_paddle(float _delta_time,
                      DrawNode* _paddle,
-                     bool _key_left,
-                     bool _key_right,
                      bool _key_up,
                      bool _key_down)
     {
@@ -61,11 +59,8 @@ namespace
         const auto pos = _paddle->getPosition();
 
         // clang-format off
-        if      (_key_left)  _paddle->setPositionX(pos.x - speed);
-        else if (_key_right) _paddle->setPositionX(pos.x + speed);
-
-        if      (_key_up)    _paddle->setPositionY(pos.y + speed);
-        else if (_key_down)  _paddle->setPositionY(pos.y - speed);
+        if      (_key_up)   _paddle->setPositionY(pos.y + speed);
+        else if (_key_down) _paddle->setPositionY(pos.y - speed);
         // clang-format on
     }
 } // anonymous namespace
@@ -123,16 +118,12 @@ auto pong::update(float _delta_time) -> void
     // Controls for left paddle.
     move_paddle(_delta_time,
                 l_paddle_,
-                is_key_pressed(EventKeyboard::KeyCode::KEY_A),
-                is_key_pressed(EventKeyboard::KeyCode::KEY_D),
                 is_key_pressed(EventKeyboard::KeyCode::KEY_W),
                 is_key_pressed(EventKeyboard::KeyCode::KEY_S));
 
     // Controls for right paddle.
     move_paddle(_delta_time,
                 r_paddle_,
-                is_key_pressed(EventKeyboard::KeyCode::KEY_LEFT_ARROW),
-                is_key_pressed(EventKeyboard::KeyCode::KEY_RIGHT_ARROW),
                 is_key_pressed(EventKeyboard::KeyCode::KEY_UP_ARROW),
                 is_key_pressed(EventKeyboard::KeyCode::KEY_DOWN_ARROW));
 }
