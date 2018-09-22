@@ -50,10 +50,7 @@ namespace
     }
 
     // Updates the position of a paddle based on the keys pressed.
-    void move_paddle(float _delta_time,
-                     DrawNode* _paddle,
-                     bool _key_up,
-                     bool _key_down)
+    void move_paddle(float _delta_time, DrawNode* _paddle, bool _key_up, bool _key_down)
     {
         const auto speed = paddle_speed * _delta_time;
         const auto pos = _paddle->getPosition();
