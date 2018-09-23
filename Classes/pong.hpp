@@ -42,8 +42,11 @@ public:
 private:
     static auto is_key_pressed(cocos2d::EventKeyboard::KeyCode _key_code) -> bool;
 
+    cocos2d::DrawNode* ball_{};
     cocos2d::DrawNode* l_paddle_{};
     cocos2d::DrawNode* r_paddle_{};
+
+    cocos2d::Vec2 ball_dir_{};
 
     inline static std::array<bool, 164> key_state_{};
 };
