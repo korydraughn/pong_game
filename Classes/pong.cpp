@@ -26,6 +26,7 @@
 #include "SimpleAudioEngine.h"
 
 #include <random>
+#include <vector>
 
 USING_NS_CC;
 
@@ -37,9 +38,26 @@ namespace
     constexpr int paddle_h = 50;
     constexpr float paddle_speed = 150;
 
-    // Creates a game ball sprite.
-    DrawNode* create_ball(Color4F _color)
+    struct physics_tag
     {
+        static constexpr int ball   = 1;
+        static constexpr int paddle = 2;
+    };
+
+    // Creates a game ball sprite.
+    auto create_ball(Color4F _color) -> DrawNode*
+    {
+        const float density = 0;
+        const float restitution = 1;
+        const float friction = 0;
+
+        auto* physics_body = PhysicsBody::createCircle(ball_r, {density, restitution, friction});
+        physics_body->setTag(physics_tag::ball);
+        physics_body->setDynamic(true);
+        physics_body->setGravityEnable(false);
+        physics_body->setRotationEnable(false);
+        physics_body->setContactTestBitmask(1);
+
         const Vec2 center{};
         const float radius = ball_r;
         const float angle = 0;
@@ -47,22 +65,46 @@ namespace
 
         auto* ball = DrawNode::create();
         ball->drawSolidCircle(center, radius, angle, segments, _color);
+        ball->setPhysicsBody(physics_body);
 
         return ball;
     }
 
     // Creates a game paddle sprite.
-    DrawNode* create_paddle(Color4F _color)
+    auto create_paddle(Color4F _color) -> DrawNode*
     {
+        const float density = 1;
+        const float restitution = 0;
+        const float friction = 0;
+
+        const auto phw = static_cast<float>(paddle_w) / 2;
+        const auto phh = static_cast<float>(paddle_h) / 2;
+
+        std::vector<Vec2> points{
+            {0, phh},
+            {phw, paddle_h},
+            {paddle_w, phh},
+            {phw, 0}
+        };
+
+        //auto* physics_body = PhysicsBody::createBox({paddle_w, paddle_h}, {density, restitution, friction});
+        auto* physics_body = PhysicsBody::createPolygon(points.data(), points.size(), {density, restitution, friction});
+        physics_body->setTag(physics_tag::paddle);
+        physics_body->setDynamic(false);
+        //physics_body->setPositionOffset({paddle_w / 2, paddle_h / 2});
+        //physics_body->setGravityEnable(false);
+        //physics_body->setRotationEnable(false);
+        physics_body->setContactTestBitmask(1);
+
         Vec2 origin{0, 0};
         Vec2 dst{paddle_w, paddle_h};
+        const auto vsize_half = Director::getInstance()->getVisibleSize().height / 2;
 
         auto* paddle = DrawNode::create();
         paddle->drawSolidRect(origin, dst, _color);
         paddle->setAnchorPoint({});
-
-        const auto vsize_half = Director::getInstance()->getVisibleSize().height / 2;
         paddle->setPositionY(vsize_half - (paddle_h / 2));
+        paddle->setPhysicsBody(physics_body);
 
         return paddle;
     }
@@ -77,24 +119,28 @@ namespace
 
     void move_ball(float _delta_time, float _ball_speed, Vec2& _ball_dir, DrawNode* _ball)
     {
+        /*
         const auto speed = _ball_speed * _delta_time;
         const auto pos = _ball->getPosition();
         auto x = pos.x + (_ball_dir.x * speed);
         auto y = pos.y + (_ball_dir.y * speed);
 
         _ball->setPosition({x, y});
+        */
 
         const auto vsize = Director::getInstance()->getVisibleSize();
         const auto min_x = ball_r;
         const auto min_y = ball_r;
         const auto max_x = vsize.width - ball_r;
         const auto max_y = vsize.height - ball_r;
-        x = _ball->getPositionX();
-        y = _ball->getPositionY();
+        auto x = _ball->getPositionX();
+        auto y = _ball->getPositionY();
+        auto* physics_body = _ball->getPhysicsBody();
+        auto vel = physics_body->getVelocity();
 
         // clang-format off
-        if (x < min_x || x > max_x) _ball_dir.x *= -1;
-        if (y < min_y || y > max_y) _ball_dir.y *= -1;
+        if (x < min_x || x > max_x) { _ball_dir.x *= -1; physics_body->setVelocity({vel.x * -1, vel.y}); }
+        if (y < min_y || y > max_y) { _ball_dir.y *= -1; physics_body->setVelocity({vel.x, vel.y * -1}); }
         // clang-format on
     }
 
@@ -129,8 +175,10 @@ Scene* pong::createScene()
 // on "init" you need to initialize your instance
 auto pong::init() -> bool
 {
-    if (!Scene::init())
+    if (!Scene::initWithPhysics())
         return false;
+
+    Scene::getPhysicsWorld()->setDebugDrawMask(0xffffffff);
 
     const auto vsize = Director::getInstance()->getVisibleSize();
 
@@ -138,10 +186,11 @@ auto pong::init() -> bool
     ball_ = create_ball(Color4F::WHITE);
     ball_->setPosition({vsize.width / 2, vsize.height / 2});
     init_ball_direction(ball_dir_);
+    ball_->getPhysicsBody()->setVelocity({ball_speed * ball_dir_.x, ball_speed * ball_dir_.y});
     addChild(ball_);
 
     // Left paddle.
-    l_paddle_ = create_paddle(Color4F::RED);
+    l_paddle_ = create_paddle(Color4F::BLUE);
     l_paddle_->setPositionX(10);
     addChild(l_paddle_);
 
@@ -151,23 +200,47 @@ auto pong::init() -> bool
     addChild(r_paddle_);
 
     // Add keyboard support.
-    auto* listener = EventListenerKeyboard::create();
+    auto* keyboard_listener = EventListenerKeyboard::create();
 
     // clang-format off
-    listener->onKeyPressed = [](auto _key_code, auto* _event)
+    keyboard_listener->onKeyPressed = [](auto _key_code, auto* _event)
     {
         log("Key with keycode %d pressed", _key_code);
         key_state_[static_cast<int>(_key_code)] = true;
     };
 
-    listener->onKeyReleased = [](auto _key_code, auto* _event)
+    keyboard_listener->onKeyReleased = [](auto _key_code, auto* _event)
     {
         log("Key with keycode %d released", _key_code);
         key_state_[static_cast<int>(_key_code)] = false;
     };
     // clang-format on
 
-    Director::getInstance()->getEventDispatcher()->addEventListenerWithSceneGraphPriority(listener, this);
+    auto* event_dispatcher = Director::getInstance()->getEventDispatcher();
+
+    event_dispatcher->addEventListenerWithSceneGraphPriority(keyboard_listener, this);
+
+    auto* contact_listener = EventListenerPhysicsContact::create();
+
+    contact_listener->onContactBegin = [](PhysicsContact& _contact) -> bool
+    {
+        auto* a = _contact.getShapeA()->getBody();
+        auto* b = _contact.getShapeA()->getBody();
+
+        for (auto* shape : {a, b})
+        {
+            if (shape->getTag() == physics_tag::ball)
+            {
+                auto vel = shape->getVelocity();
+                shape->setVelocity({vel.x * -1, vel.y});
+                break;
+            }
+        }
+
+        return true;
+    };
+
+    event_dispatcher->addEventListenerWithSceneGraphPriority(contact_listener, this);
 
     scheduleUpdate();
 
