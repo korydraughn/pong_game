@@ -27,6 +27,7 @@
 
 #include <random>
 #include <vector>
+#include <tuple>
 
 USING_NS_CC;
 
@@ -44,20 +45,23 @@ namespace
         static constexpr int paddle = 2;
     };
 
-    // Creates a game ball sprite.
-    auto create_ball(Color4F _color) -> DrawNode*
+    template <typename T>
+    T ptm(float _x, float _y) noexcept
     {
-        const float density = 0;
-        const float restitution = 1;
-        const float friction = 0;
+        auto size = Director::getInstance()->getVisibleSize();
+        return {_x / size.width, _y / size.height};
+    }
 
-        auto* physics_body = PhysicsBody::createCircle(ball_r, {density, restitution, friction});
-        physics_body->setTag(physics_tag::ball);
-        physics_body->setDynamic(true);
-        physics_body->setGravityEnable(false);
-        physics_body->setRotationEnable(false);
-        physics_body->setContactTestBitmask(1);
+    template <typename T>
+    T mtp(float _x, float _y) noexcept
+    {
+        auto size = Director::getInstance()->getVisibleSize();
+        return {_x * size.width, _y * size.height};
+    }
 
+    // Creates a game ball sprite.
+    auto create_ball(b2World& _world, Color4F _color) -> std::tuple<DrawNode*, b2Body*>
+    {
         const Vec2 center{};
         const float radius = ball_r;
         const float angle = 0;
@@ -65,48 +69,67 @@ namespace
 
         auto* ball = DrawNode::create();
         ball->drawSolidCircle(center, radius, angle, segments, _color);
-        ball->setPhysicsBody(physics_body);
 
-        return ball;
+        // Setup physics.
+        // Create box2d body.
+        b2BodyDef body_def;
+        body_def.type = b2_dynamicBody;
+        body_def.bullet = true;
+        auto* body = _world.CreateBody(&body_def);
+        body->SetGravityScale(0);
+
+        // Create shape.
+        b2CircleShape shape;
+        shape.m_p.Set(0, 0);
+        shape.m_radius = ptm<b2Vec2>(ball_r, 0.f).x;
+
+        // Create box2d fixture.
+        b2FixtureDef fixture_def;
+        fixture_def.density = 1.f;
+        fixture_def.friction = 0.f;
+        fixture_def.restitution = 1.f;
+        fixture_def.shape = &shape;
+        body->CreateFixture(&fixture_def);
+
+        return {ball, body};
     }
 
     // Creates a game paddle sprite.
-    auto create_paddle(Color4F _color) -> DrawNode*
+    auto create_paddle(b2World& _world, Color4F _color) -> std::tuple<DrawNode*, b2Body*>
     {
-        const float density = 1;
-        const float restitution = 0;
-        const float friction = 0;
-
-        const auto phw = static_cast<float>(paddle_w) / 2;
-        const auto phh = static_cast<float>(paddle_h) / 2;
-
-        std::vector<Vec2> points{
-            {0, phh},
-            {phw, paddle_h},
-            {paddle_w, phh},
-            {phw, 0}
-        };
-
-        //auto* physics_body = PhysicsBody::createBox({paddle_w, paddle_h}, {density, restitution, friction});
-        auto* physics_body = PhysicsBody::createPolygon(points.data(), points.size(), {density, restitution, friction});
-        physics_body->setTag(physics_tag::paddle);
-        physics_body->setDynamic(false);
-        //physics_body->setPositionOffset({paddle_w / 2, paddle_h / 2});
-        //physics_body->setGravityEnable(false);
-        //physics_body->setRotationEnable(false);
-        physics_body->setContactTestBitmask(1);
-
         Vec2 origin{0, 0};
         Vec2 dst{paddle_w, paddle_h};
         const auto vsize_half = Director::getInstance()->getVisibleSize().height / 2;
 
         auto* paddle = DrawNode::create();
         paddle->drawSolidRect(origin, dst, _color);
-        paddle->setAnchorPoint({});
+        //paddle->setAnchorPoint({});
         paddle->setPositionY(vsize_half - (paddle_h / 2));
-        paddle->setPhysicsBody(physics_body);
 
-        return paddle;
+        // Setup physics.
+        // Create box2d body.
+        b2BodyDef body_def;
+        body_def.type = b2_kinematicBody;
+        auto pos = ptm<b2Vec2>(0, paddle->getPositionY());
+        body_def.position.Set(pos.x, pos.y);
+        auto* body = _world.CreateBody(&body_def);
+        body->SetGravityScale(0);
+
+        // Create shape.
+        const auto phw = static_cast<float>(paddle_w) / 2;
+        const auto phh = static_cast<float>(paddle_h) / 2;
+        b2PolygonShape shape;
+        shape.SetAsBox(phw, phh);
+
+        // Create box2d fixture.
+        b2FixtureDef fixture_def;
+        fixture_def.density = 1.f;
+        fixture_def.friction = 0.f;
+        fixture_def.restitution = 0.f;
+        fixture_def.shape = &shape;
+        body->CreateFixture(&fixture_def);
+
+        return {paddle, body};
     }
 
     void init_ball_direction(Vec2& _dir)
@@ -117,17 +140,30 @@ namespace
         _dir.y = dist(gen) > 0 ? 1 : -1;
     }
 
+    void update_node_position(b2Body& _body, DrawNode& _node)
+    {
+        auto pos = _body.GetPosition();
+        //log("ball body pos = {%f, %f}", pos.x, pos.y);
+        _node.setPosition(mtp<Vec2>(pos.x, pos.y));
+        //log("ball node pos = {%f, %f}", _node.getPositionX(), _node.getPositionY());
+
+        /*
+        const auto vsize = Director::getInstance()->getVisibleSize();
+        const auto min_x = ball_r;
+        const auto min_y = ball_r;
+        const auto max_x = vsize.width - ball_r;
+        const auto max_y = vsize.height - ball_r;
+        auto x = _node.getPositionX();
+        auto y = _node.getPositionY();
+
+        if (x < min_x || x > max_x) { _node.setPosition({vsize.width / 2, vsize.height / 2}); }
+        if (y < min_y || y > max_y) { _node.setPosition({vsize.width / 2, vsize.height / 2}); }
+        */
+    }
+
+#if 0
     void move_ball(float _delta_time, float _ball_speed, Vec2& _ball_dir, DrawNode* _ball)
     {
-        /*
-        const auto speed = _ball_speed * _delta_time;
-        const auto pos = _ball->getPosition();
-        auto x = pos.x + (_ball_dir.x * speed);
-        auto y = pos.y + (_ball_dir.y * speed);
-
-        _ball->setPosition({x, y});
-        */
-
         const auto vsize = Director::getInstance()->getVisibleSize();
         const auto min_x = ball_r;
         const auto min_y = ball_r;
@@ -135,35 +171,40 @@ namespace
         const auto max_y = vsize.height - ball_r;
         auto x = _ball->getPositionX();
         auto y = _ball->getPositionY();
-        auto* physics_body = _ball->getPhysicsBody();
-        auto vel = physics_body->getVelocity();
 
         // clang-format off
-        if (x < min_x || x > max_x) { _ball_dir.x *= -1; physics_body->setVelocity({vel.x * -1, vel.y}); }
-        if (y < min_y || y > max_y) { _ball_dir.y *= -1; physics_body->setVelocity({vel.x, vel.y * -1}); }
+        if (x < min_x || x > max_x) { _ball->setPosition({vsize.width / 2, vsize.height / 2}); }
+        if (y < min_y || y > max_y) { _ball->setPosition({vsize.width / 2, vsize.height / 2}); }
         // clang-format on
     }
+#endif
 
     // Updates the position of a paddle based on the keys pressed.
-    void move_paddle(float _delta_time, DrawNode* _paddle, bool _key_up, bool _key_down)
+    void move_paddle(b2Body& _body, DrawNode& _paddle, bool _key_up, bool _key_down)
     {
-        const auto speed = paddle_speed * _delta_time;
-        auto y = _paddle->getPositionY();
+        _body.SetLinearVelocity({});
 
         // clang-format off
-        if      (_key_up)   _paddle->setPositionY(y + speed);
-        else if (_key_down) _paddle->setPositionY(y - speed);
+        if      (_key_up)   _body.SetLinearVelocity(ptm<b2Vec2>(0.f,  paddle_speed));
+        else if (_key_down) _body.SetLinearVelocity(ptm<b2Vec2>(0.f, -paddle_speed));
         // clang-format on
-        
+
+#if 0
+        auto y = _paddle.getPositionY();
+
         // Keep paddle in the visible area.
         const auto vheight = Director::getInstance()->getVisibleSize().height;
         const auto max_y = vheight - paddle_h;
-        y = _paddle->getPositionY();
+        y = _paddle.getPositionY();
 
         // clang-format off
-        if      (y < 0)     _paddle->setPositionY(0);
-        else if (y > max_y) _paddle->setPositionY(max_y);
+        if      (y < 0)     _paddle.setPositionY(0);
+        else if (y > max_y) _paddle.setPositionY(max_y);
         // clang-format on
+#endif
+
+        auto p = _body.GetPosition();
+        _paddle.setPosition({_paddle.getPositionX(), mtp<Vec2>(0, p.y).y});
     }
 } // anonymous namespace
 
@@ -175,28 +216,45 @@ Scene* pong::createScene()
 // on "init" you need to initialize your instance
 auto pong::init() -> bool
 {
-    if (!Scene::initWithPhysics())
+    if (!Scene::init())
         return false;
 
-    Scene::getPhysicsWorld()->setDebugDrawMask(0xffffffff);
+    init_b2_world();
 
     const auto vsize = Director::getInstance()->getVisibleSize();
 
     // Game ball.
-    ball_ = create_ball(Color4F::WHITE);
-    ball_->setPosition({vsize.width / 2, vsize.height / 2});
+    {
+        auto [s, b] = create_ball(*world_, Color4F::WHITE);
+        ball_ = s;
+        ball_body_ = b;
+    }
     init_ball_direction(ball_dir_);
-    ball_->getPhysicsBody()->setVelocity({ball_speed * ball_dir_.x, ball_speed * ball_dir_.y});
+    ball_->setPosition({vsize.width / 2, vsize.height / 2});
+    ball_body_->SetTransform(ptm<b2Vec2>(ball_->getPositionX(), ball_->getPositionY()), 0.f);
+    ball_body_->SetLinearVelocity(ptm<b2Vec2>(ball_speed, 0.f));
+    const auto v = ball_body_->GetLinearVelocity();
+    log("linear velocity = {%f, %f}", v.x, v.y);
     addChild(ball_);
 
     // Left paddle.
-    l_paddle_ = create_paddle(Color4F::BLUE);
+    {
+        auto [s, b] = create_paddle(*world_, Color4F::BLUE);
+        l_paddle_ = s;
+        l_paddle_body_ = b;
+    }
     l_paddle_->setPositionX(10);
+    l_paddle_body_->SetTransform(ptm<b2Vec2>(l_paddle_->getPositionX(), l_paddle_->getPositionY()), 0.f);
     addChild(l_paddle_);
 
     // Right paddle.
-    r_paddle_ = create_paddle(Color4F::GREEN);
+    {
+        auto [s, b] = create_paddle(*world_, Color4F::GREEN);
+        r_paddle_ = s;
+        r_paddle_body_ = b;
+    }
     r_paddle_->setPositionX(vsize.width - paddle_w - 10);
+    r_paddle_body_->SetTransform(ptm<b2Vec2>(r_paddle_->getPositionX(), r_paddle_->getPositionY()), 0.f);
     addChild(r_paddle_);
 
     // Add keyboard support.
@@ -220,28 +278,6 @@ auto pong::init() -> bool
 
     event_dispatcher->addEventListenerWithSceneGraphPriority(keyboard_listener, this);
 
-    auto* contact_listener = EventListenerPhysicsContact::create();
-
-    contact_listener->onContactBegin = [](PhysicsContact& _contact) -> bool
-    {
-        auto* a = _contact.getShapeA()->getBody();
-        auto* b = _contact.getShapeA()->getBody();
-
-        for (auto* shape : {a, b})
-        {
-            if (shape->getTag() == physics_tag::ball)
-            {
-                auto vel = shape->getVelocity();
-                shape->setVelocity({vel.x * -1, vel.y});
-                break;
-            }
-        }
-
-        return true;
-    };
-
-    event_dispatcher->addEventListenerWithSceneGraphPriority(contact_listener, this);
-
     scheduleUpdate();
 
     return true;
@@ -251,22 +287,36 @@ auto pong::update(float _delta_time) -> void
 {
     Node::update(_delta_time);
 
-    move_ball(_delta_time, ball_speed, ball_dir_, ball_);
-
     // Controls for left paddle.
-    move_paddle(_delta_time,
-                l_paddle_,
+    move_paddle(*l_paddle_body_,
+                *l_paddle_,
                 is_key_pressed(EventKeyboard::KeyCode::KEY_W),
                 is_key_pressed(EventKeyboard::KeyCode::KEY_S));
 
     // Controls for right paddle.
-    move_paddle(_delta_time,
-                r_paddle_,
+    move_paddle(*r_paddle_body_,
+                *r_paddle_,
                 is_key_pressed(EventKeyboard::KeyCode::KEY_UP_ARROW),
                 is_key_pressed(EventKeyboard::KeyCode::KEY_DOWN_ARROW));
+
+    constexpr auto time_step = 1.f / 60.f;
+    constexpr auto velocity_interations = 6;
+    constexpr auto position_interations = 2;
+
+    world_->Step(time_step, velocity_interations, position_interations);
+
+    update_node_position(*ball_body_, *ball_);
+}
+
+auto pong::init_b2_world() -> void
+{
+    world_ = std::make_unique<b2World>(b2Vec2{0.f, -9.8f});
+    //world_->SetContinuousPhysics(true);
+    //world_->SetAllowSleeping(true);
 }
 
 auto pong::is_key_pressed(EventKeyboard::KeyCode _key_code) -> bool
 {
     return key_state_[static_cast<int>(_key_code)];
 }
+

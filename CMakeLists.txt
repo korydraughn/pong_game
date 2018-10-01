@@ -127,6 +127,7 @@ cocos_build_app(${APP_NAME}
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
+target_include_directories(${APP_NAME} PRIVATE ${Box2D_INCLUDE_DIRS})
 
 if(APPLE)
     set_target_properties(${APP_NAME} PROPERTIES RESOURCE "${APP_UI_RES}")

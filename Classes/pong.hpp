@@ -26,8 +26,10 @@
 #define __PONG_HPP__
 
 #include "cocos2d.h"
+#include "Box2D/Box2D.h"
 
 #include <array>
+#include <memory>
 
 class pong : public cocos2d::Scene
 {
@@ -41,6 +43,13 @@ public:
 
 private:
     static auto is_key_pressed(cocos2d::EventKeyboard::KeyCode _key_code) -> bool;
+
+    void init_b2_world();
+
+    std::unique_ptr<b2World> world_;
+    b2Body* ball_body_;
+    b2Body* l_paddle_body_;
+    b2Body* r_paddle_body_;
 
     cocos2d::DrawNode* ball_{};
     cocos2d::DrawNode* l_paddle_{};
