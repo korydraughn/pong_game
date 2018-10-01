@@ -33,30 +33,33 @@ USING_NS_CC;
 
 namespace
 {
-    constexpr float ball_r = 5;
-    constexpr float ball_speed = 250;
+    constexpr float scale = 1.5f;
+    constexpr float ball_r = 3;
+    constexpr float ball_speed = 75.f;
     constexpr int paddle_w = 10;
     constexpr int paddle_h = 50;
     constexpr float paddle_speed = 150;
 
+    /*
     struct physics_tag
     {
         static constexpr int ball   = 1;
         static constexpr int paddle = 2;
     };
+    */
 
     template <typename T>
     T ptm(float _x, float _y) noexcept
     {
-        auto size = Director::getInstance()->getVisibleSize();
-        return {_x / size.width, _y / size.height};
+        //auto size = Director::getInstance()->getVisibleSize();
+        return {_x / scale, _y / scale};
     }
 
     template <typename T>
     T mtp(float _x, float _y) noexcept
     {
-        auto size = Director::getInstance()->getVisibleSize();
-        return {_x * size.width, _y * size.height};
+        //auto size = Director::getInstance()->getVisibleSize();
+        return {_x * scale, _y * scale};
     }
 
     // Creates a game ball sprite.
@@ -66,9 +69,11 @@ namespace
         const float radius = ball_r;
         const float angle = 0;
         const unsigned int segments = 10;
+        auto vsize = Director::getInstance()->getVisibleSize();
 
         auto* ball = DrawNode::create();
         ball->drawSolidCircle(center, radius, angle, segments, _color);
+        ball->setPosition({static_cast<float>(vsize.width) / 2, static_cast<float>(vsize.height) / 2});
 
         // Setup physics.
         // Create box2d body.
@@ -79,8 +84,9 @@ namespace
         body->SetGravityScale(0);
 
         // Create shape.
+        auto pos = ptm<Vec2>(ball->getPositionX(), ball->getPositionY());
         b2CircleShape shape;
-        shape.m_p.Set(0, 0);
+        shape.m_p.Set(0.f, 0.f);
         shape.m_radius = ptm<b2Vec2>(ball_r, 0.f).x;
 
         // Create box2d fixture.
@@ -103,7 +109,6 @@ namespace
 
         auto* paddle = DrawNode::create();
         paddle->drawSolidRect(origin, dst, _color);
-        //paddle->setAnchorPoint({});
         paddle->setPositionY(vsize_half - (paddle_h / 2));
 
         // Setup physics.
@@ -118,8 +123,9 @@ namespace
         // Create shape.
         const auto phw = static_cast<float>(paddle_w) / 2;
         const auto phh = static_cast<float>(paddle_h) / 2;
+        auto size = ptm<b2Vec2>(phw, phh);
         b2PolygonShape shape;
-        shape.SetAsBox(phw, phh);
+        shape.SetAsBox(size.x, size.y, {phw, -phh}, 0.f); // TODO Should probably be scaled.
 
         // Create box2d fixture.
         b2FixtureDef fixture_def;
@@ -142,42 +148,13 @@ namespace
 
     void update_node_position(b2Body& _body, DrawNode& _node)
     {
+        auto v = _body.GetLinearVelocity();
         auto pos = _body.GetPosition();
-        //log("ball body pos = {%f, %f}", pos.x, pos.y);
         _node.setPosition(mtp<Vec2>(pos.x, pos.y));
-        //log("ball node pos = {%f, %f}", _node.getPositionX(), _node.getPositionY());
-
-        /*
-        const auto vsize = Director::getInstance()->getVisibleSize();
-        const auto min_x = ball_r;
-        const auto min_y = ball_r;
-        const auto max_x = vsize.width - ball_r;
-        const auto max_y = vsize.height - ball_r;
-        auto x = _node.getPositionX();
-        auto y = _node.getPositionY();
-
-        if (x < min_x || x > max_x) { _node.setPosition({vsize.width / 2, vsize.height / 2}); }
-        if (y < min_y || y > max_y) { _node.setPosition({vsize.width / 2, vsize.height / 2}); }
-        */
+        log("linear velocity = {%f, %f}", v.x, v.y);
+        log("ball body pos   = {%f, %f}", pos.x, pos.y);
+        log("ball node pos   = {%f, %f}", _node.getPositionX(), _node.getPositionY());
     }
-
-#if 0
-    void move_ball(float _delta_time, float _ball_speed, Vec2& _ball_dir, DrawNode* _ball)
-    {
-        const auto vsize = Director::getInstance()->getVisibleSize();
-        const auto min_x = ball_r;
-        const auto min_y = ball_r;
-        const auto max_x = vsize.width - ball_r;
-        const auto max_y = vsize.height - ball_r;
-        auto x = _ball->getPositionX();
-        auto y = _ball->getPositionY();
-
-        // clang-format off
-        if (x < min_x || x > max_x) { _ball->setPosition({vsize.width / 2, vsize.height / 2}); }
-        if (y < min_y || y > max_y) { _ball->setPosition({vsize.width / 2, vsize.height / 2}); }
-        // clang-format on
-    }
-#endif
 
     // Updates the position of a paddle based on the keys pressed.
     void move_paddle(b2Body& _body, DrawNode& _paddle, bool _key_up, bool _key_down)
@@ -188,20 +165,6 @@ namespace
         if      (_key_up)   _body.SetLinearVelocity(ptm<b2Vec2>(0.f,  paddle_speed));
         else if (_key_down) _body.SetLinearVelocity(ptm<b2Vec2>(0.f, -paddle_speed));
         // clang-format on
-
-#if 0
-        auto y = _paddle.getPositionY();
-
-        // Keep paddle in the visible area.
-        const auto vheight = Director::getInstance()->getVisibleSize().height;
-        const auto max_y = vheight - paddle_h;
-        y = _paddle.getPositionY();
-
-        // clang-format off
-        if      (y < 0)     _paddle.setPositionY(0);
-        else if (y > max_y) _paddle.setPositionY(max_y);
-        // clang-format on
-#endif
 
         auto p = _body.GetPosition();
         _paddle.setPosition({_paddle.getPositionX(), mtp<Vec2>(0, p.y).y});
@@ -224,35 +187,21 @@ auto pong::init() -> bool
     const auto vsize = Director::getInstance()->getVisibleSize();
 
     // Game ball.
-    {
-        auto [s, b] = create_ball(*world_, Color4F::WHITE);
-        ball_ = s;
-        ball_body_ = b;
-    }
+    std::tie(ball_, ball_body_) = create_ball(*world_, Color4F::WHITE);
     init_ball_direction(ball_dir_);
-    ball_->setPosition({vsize.width / 2, vsize.height / 2});
     ball_body_->SetTransform(ptm<b2Vec2>(ball_->getPositionX(), ball_->getPositionY()), 0.f);
     ball_body_->SetLinearVelocity(ptm<b2Vec2>(ball_speed, 0.f));
-    const auto v = ball_body_->GetLinearVelocity();
-    log("linear velocity = {%f, %f}", v.x, v.y);
+    //ball_body_->SetLinearVelocity(ptm<b2Vec2>(ball_speed, ball_speed));
     addChild(ball_);
 
     // Left paddle.
-    {
-        auto [s, b] = create_paddle(*world_, Color4F::BLUE);
-        l_paddle_ = s;
-        l_paddle_body_ = b;
-    }
+    std::tie(l_paddle_, l_paddle_body_) = create_paddle(*world_, Color4F::BLUE);
     l_paddle_->setPositionX(10);
     l_paddle_body_->SetTransform(ptm<b2Vec2>(l_paddle_->getPositionX(), l_paddle_->getPositionY()), 0.f);
     addChild(l_paddle_);
 
     // Right paddle.
-    {
-        auto [s, b] = create_paddle(*world_, Color4F::GREEN);
-        r_paddle_ = s;
-        r_paddle_body_ = b;
-    }
+    std::tie(r_paddle_, r_paddle_body_) = create_paddle(*world_, Color4F::GREEN);
     r_paddle_->setPositionX(vsize.width - paddle_w - 10);
     r_paddle_body_->SetTransform(ptm<b2Vec2>(r_paddle_->getPositionX(), r_paddle_->getPositionY()), 0.f);
     addChild(r_paddle_);
