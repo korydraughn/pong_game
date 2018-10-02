@@ -51,14 +51,12 @@ namespace
     template <typename T>
     T ptm(float _x, float _y) noexcept
     {
-        //auto size = Director::getInstance()->getVisibleSize();
         return {_x / scale, _y / scale};
     }
 
     template <typename T>
     T mtp(float _x, float _y) noexcept
     {
-        //auto size = Director::getInstance()->getVisibleSize();
         return {_x * scale, _y * scale};
     }
 
@@ -103,13 +101,15 @@ namespace
     // Creates a game paddle sprite.
     auto create_paddle(b2World& _world, Color4F _color) -> std::tuple<DrawNode*, b2Body*>
     {
-        Vec2 origin{0, 0};
-        Vec2 dst{paddle_w, paddle_h};
+        const auto phw = static_cast<float>(paddle_w) / 2;
+        const auto phh = static_cast<float>(paddle_h) / 2;
+        Vec2 origin{-phw, -phh};
+        Vec2 dst{phw, phh};
         const auto vsize_half = Director::getInstance()->getVisibleSize().height / 2;
 
         auto* paddle = DrawNode::create();
         paddle->drawSolidRect(origin, dst, _color);
-        paddle->setPositionY(vsize_half - (paddle_h / 2));
+        paddle->setPositionY(vsize_half);
 
         // Setup physics.
         // Create box2d body.
@@ -121,11 +121,9 @@ namespace
         body->SetGravityScale(0);
 
         // Create shape.
-        const auto phw = static_cast<float>(paddle_w) / 2;
-        const auto phh = static_cast<float>(paddle_h) / 2;
         auto size = ptm<b2Vec2>(phw, phh);
         b2PolygonShape shape;
-        shape.SetAsBox(size.x, size.y, {phw, -phh}, 0.f); // TODO Should probably be scaled.
+        shape.SetAsBox(size.x, size.y);
 
         // Create box2d fixture.
         b2FixtureDef fixture_def;
@@ -138,6 +136,35 @@ namespace
         return {paddle, body};
     }
 
+    void create_upper_and_lower_boundaries(b2World& _world) noexcept
+    {
+        const auto size = Director::getInstance()->getVisibleSize();
+        const auto screen = ptm<b2Vec2>(size.width, size.height);
+
+        // Lower boundary.
+        b2BodyDef body_def;
+        body_def.type = b2_staticBody;
+        auto* body = _world.CreateBody(&body_def);
+
+        b2Vec2 p0{};
+        b2Vec2 p1{screen.x, 0.f};
+        b2EdgeShape shape;
+        shape.Set(p0, p1);
+        
+        b2FixtureDef fixture_def;
+        fixture_def.density = 1.f;
+        fixture_def.friction = 0.f;
+        fixture_def.restitution = 0.f;
+        fixture_def.shape = &shape;
+        body->CreateFixture(&fixture_def);
+
+        // Upper boundary.
+        p0.y = p1.y = screen.y;
+        body = _world.CreateBody(&body_def);
+        shape.Set(p0, p1);
+        body->CreateFixture(&fixture_def);
+    }
+
     void init_ball_direction(Vec2& _dir)
     {
         static std::mt19937 gen{std::random_device{}()};
@@ -148,12 +175,8 @@ namespace
 
     void update_node_position(b2Body& _body, DrawNode& _node)
     {
-        auto v = _body.GetLinearVelocity();
         auto pos = _body.GetPosition();
         _node.setPosition(mtp<Vec2>(pos.x, pos.y));
-        log("linear velocity = {%f, %f}", v.x, v.y);
-        log("ball body pos   = {%f, %f}", pos.x, pos.y);
-        log("ball node pos   = {%f, %f}", _node.getPositionX(), _node.getPositionY());
     }
 
     // Updates the position of a paddle based on the keys pressed.
@@ -184,14 +207,15 @@ auto pong::init() -> bool
 
     init_b2_world();
 
+    create_upper_and_lower_boundaries(*world_);
+
     const auto vsize = Director::getInstance()->getVisibleSize();
 
     // Game ball.
     std::tie(ball_, ball_body_) = create_ball(*world_, Color4F::WHITE);
     init_ball_direction(ball_dir_);
     ball_body_->SetTransform(ptm<b2Vec2>(ball_->getPositionX(), ball_->getPositionY()), 0.f);
-    ball_body_->SetLinearVelocity(ptm<b2Vec2>(ball_speed, 0.f));
-    //ball_body_->SetLinearVelocity(ptm<b2Vec2>(ball_speed, ball_speed));
+    ball_body_->SetLinearVelocity(ptm<b2Vec2>(ball_speed, ball_speed));
     addChild(ball_);
 
     // Left paddle.
@@ -199,6 +223,10 @@ auto pong::init() -> bool
     l_paddle_->setPositionX(10);
     l_paddle_body_->SetTransform(ptm<b2Vec2>(l_paddle_->getPositionX(), l_paddle_->getPositionY()), 0.f);
     addChild(l_paddle_);
+
+    //auto* pt = DrawNode::create();
+    //pt->drawPoint(l_paddle_->getPosition(), 5.f, Color4F::YELLOW);
+    //addChild(pt);
 
     // Right paddle.
     std::tie(r_paddle_, r_paddle_body_) = create_paddle(*world_, Color4F::GREEN);
@@ -260,7 +288,7 @@ auto pong::update(float _delta_time) -> void
 auto pong::init_b2_world() -> void
 {
     world_ = std::make_unique<b2World>(b2Vec2{0.f, -9.8f});
-    //world_->SetContinuousPhysics(true);
+    world_->SetContinuousPhysics(true);
     //world_->SetAllowSleeping(true);
 }
 
