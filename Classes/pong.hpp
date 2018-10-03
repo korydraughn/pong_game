@@ -51,11 +51,15 @@ private:
     b2Body* l_paddle_body_;
     b2Body* r_paddle_body_;
 
+    cocos2d::Label* l_score_{};
+    cocos2d::Label* r_score_{};
     cocos2d::DrawNode* ball_{};
     cocos2d::DrawNode* l_paddle_{};
     cocos2d::DrawNode* r_paddle_{};
 
     cocos2d::Vec2 ball_dir_{};
+    int l_score_value_ = 0;
+    int r_score_value_ = 0;
 
     inline static std::array<bool, 164> key_state_{};
 };

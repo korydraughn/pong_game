@@ -35,9 +35,9 @@ namespace
 {
     constexpr float scale = 1.5f;
     constexpr float ball_r = 3;
-    constexpr float ball_speed = 75.f;
-    constexpr int paddle_w = 10;
-    constexpr int paddle_h = 50;
+    constexpr float ball_speed = 120.f;
+    constexpr float paddle_w = 10;
+    constexpr float paddle_h = 50;
     constexpr float paddle_speed = 150;
 
     /*
@@ -173,10 +173,20 @@ namespace
         _dir.y = dist(gen) > 0 ? 1 : -1;
     }
 
-    void update_node_position(b2Body& _body, DrawNode& _node)
+    void update_ball_and_score(b2Body& _body, DrawNode& _node, int& _l_score, int& _r_score)
     {
         auto pos = _body.GetPosition();
         _node.setPosition(mtp<Vec2>(pos.x, pos.y));
+
+        if (_node.getPositionX() < -20.f) ++_r_score;
+        if (_node.getPositionX() > 500.f) ++_l_score;
+
+        if (_node.getPositionX() < -20.f || _node.getPositionX() > 500.f)
+        {
+            auto size = Director::getInstance()->getVisibleSize();
+            _node.setPosition({size.width / 2, size.height / 2});
+            _body.SetTransform(ptm<b2Vec2>(_node.getPositionX(), _node.getPositionY()), 0.f);
+        }
     }
 
     // Updates the position of a paddle based on the keys pressed.
@@ -191,6 +201,17 @@ namespace
 
         auto p = _body.GetPosition();
         _paddle.setPosition({_paddle.getPositionX(), mtp<Vec2>(0, p.y).y});
+
+        if (auto max_y = 320.f - (paddle_h / 2); _paddle.getPositionY() > max_y)
+        {
+            _paddle.setPositionY(max_y);
+            _body.SetTransform(ptm<b2Vec2>(_paddle.getPositionX(), _paddle.getPositionY()), 0.f);
+        }
+        else if (auto min_y = paddle_h / 2; _paddle.getPositionY() < min_y)
+        {
+            _paddle.setPositionY(min_y);
+            _body.SetTransform(ptm<b2Vec2>(_paddle.getPositionX(), _paddle.getPositionY()), 0.f);
+        }
     }
 } // anonymous namespace
 
@@ -210,6 +231,15 @@ auto pong::init() -> bool
     create_upper_and_lower_boundaries(*world_);
 
     const auto vsize = Director::getInstance()->getVisibleSize();
+
+    // Hub.
+    l_score_ = Label::createWithTTF("0", "fonts/arial.ttf", 36);
+    l_score_->setPosition({vsize.width * 0.25f, vsize.height - 50.f});
+    addChild(l_score_, 2);
+
+    r_score_ = Label::createWithTTF("0", "fonts/arial.ttf", 36);
+    r_score_->setPosition({vsize.width * 0.75f, vsize.height - 50.f});
+    addChild(r_score_, 2);
 
     // Game ball.
     std::tie(ball_, ball_body_) = create_ball(*world_, Color4F::WHITE);
@@ -276,20 +306,23 @@ auto pong::update(float _delta_time) -> void
                 is_key_pressed(EventKeyboard::KeyCode::KEY_UP_ARROW),
                 is_key_pressed(EventKeyboard::KeyCode::KEY_DOWN_ARROW));
 
+    update_ball_and_score(*ball_body_, *ball_, l_score_value_, r_score_value_);
+
+    l_score_->setString(std::to_string(l_score_value_));
+    r_score_->setString(std::to_string(r_score_value_));
+
     constexpr auto time_step = 1.f / 60.f;
     constexpr auto velocity_interations = 6;
     constexpr auto position_interations = 2;
 
     world_->Step(time_step, velocity_interations, position_interations);
-
-    update_node_position(*ball_body_, *ball_);
 }
 
 auto pong::init_b2_world() -> void
 {
     world_ = std::make_unique<b2World>(b2Vec2{0.f, -9.8f});
     world_->SetContinuousPhysics(true);
-    //world_->SetAllowSleeping(true);
+    world_->SetAllowSleeping(false);
 }
 
 auto pong::is_key_pressed(EventKeyboard::KeyCode _key_code) -> bool
